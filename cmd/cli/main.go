@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -13,18 +14,18 @@ func main() {
 	eid1 := "666"
 	eid2 := "777"
 
-	streams := map[string][]Event{
+	streams := map[string][]EventEnvelope{
 		"sl-123": {
-			ShoppingListCreated{ID: id1, Name: "first list"},
-			ShoppingListNameChanged{Name: "Original list"},
-			EntryAdded{ID: eid1, Name: "my item"},
-			EntryChecked{ID: eid1},
-			EntryUnchecked{ID: eid1},
+			EventEnvelope{StreamID: "sl-123", Event: ShoppingListCreated{ID: id1, Name: "first list"}},
+			EventEnvelope{StreamID: "sl-123", Event: ShoppingListNameChanged{Name: "Original list"}},
+			EventEnvelope{StreamID: "sl-123", Event: EntryAdded{ID: eid1, Name: "my item"}},
+			EventEnvelope{StreamID: "sl-123", Event: EntryChecked{ID: eid1}},
+			EventEnvelope{StreamID: "sl-123", Event: EntryUnchecked{ID: eid1}},
 		},
 		"sl-444": {
-			ShoppingListCreated{ID: id2, Name: "second list"},
-			EntryAdded{ID: eid2, Name: "some item"},
-			EntryChecked{ID: eid2},
+			EventEnvelope{StreamID: "sl-444", Event: ShoppingListCreated{ID: id2, Name: "second list"}},
+			EventEnvelope{StreamID: "sl-444", Event: EntryAdded{ID: eid2, Name: "some item"}},
+			EventEnvelope{StreamID: "sl-444", Event: EntryChecked{ID: eid2}},
 		},
 	}
 
@@ -51,7 +52,16 @@ type ShoppingList struct {
 	ID                 string
 	Name               string
 	Entries            map[string]Entry
-	uncommittedChanges []Event
+	uncommittedChanges []EventEnvelope
+}
+
+type Repository interface {
+	Save(ctx context.Context, sl ShoppingList) error
+	Get(ctx context.Context, id string) (ShoppingList, error)
+}
+
+type EventBus interface {
+	Send(context.Context, Event) error
 }
 
 func (s *ShoppingList) Print() {
@@ -59,7 +69,7 @@ func (s *ShoppingList) Print() {
 	fmt.Printf("%s\n", bytes)
 }
 
-func NewShoppingList(events ...Event) *ShoppingList {
+func NewShoppingList(events ...EventEnvelope) *ShoppingList {
 	sl := &ShoppingList{
 		Entries: make(map[string]Entry),
 	}
@@ -67,18 +77,18 @@ func NewShoppingList(events ...Event) *ShoppingList {
 	return sl
 }
 
-func (s *ShoppingList) rehydrate(events []Event) error {
+func (s *ShoppingList) rehydrate(events []EventEnvelope) error {
 	for _, ev := range events {
-		if err := s.apply(ev); err != nil {
+		if err := s.apply(ev.Event); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ShoppingList) ApplyChange(ev Event) error {
+func (s *ShoppingList) ApplyChange(ev EventEnvelope) error {
 	s.uncommittedChanges = append(s.uncommittedChanges, ev)
-	return s.apply(ev)
+	return s.apply(ev.Event)
 }
 
 func (s *ShoppingList) apply(ev Event) error {

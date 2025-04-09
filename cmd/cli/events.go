@@ -53,3 +53,9 @@ type EntryUnchecked struct {
 func (ev EntryUnchecked) Accept(v Visitor) error {
 	return v.VisitEntryUnchecked(ev)
 }
+
+type EventEnvelope struct {
+	StreamID string
+	Event Event
+}
+
